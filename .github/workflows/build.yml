@@ -24,12 +24,14 @@ jobs:
         unzip -q gradle-8.6-bin.zip
         echo "$GITHUB_WORKSPACE/gradle-8.6/bin" >> $GITHUB_PATH
 
-    - name: Build APK
+     - name: Build APK
       working-directory: SeeMeter
       run: |
         echo "sdk.dir=$ANDROID_HOME" > local.properties
         echo "org.gradle.daemon=false" > gradle.properties
         echo "org.gradle.jvmargs=-Xmx2g" >> gradle.properties
+        echo "android.useAndroidX=true" >> gradle.properties
+        echo "android.enableJetifier=true" >> gradle.properties
         gradle assembleDebug
 
     - uses: actions/upload-artifact@v4

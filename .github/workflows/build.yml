@@ -24,7 +24,7 @@ jobs:
         unzip -q gradle-8.6-bin.zip
         echo "$GITHUB_WORKSPACE/gradle-8.6/bin" >> $GITHUB_PATH
 
-     - name: Build APK
+    - name: Build APK
       working-directory: SeeMeter
       run: |
         echo "sdk.dir=$ANDROID_HOME" > local.properties

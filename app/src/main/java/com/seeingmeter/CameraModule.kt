@@ -58,7 +58,8 @@ class CameraController(private val ctx:Context,private val analyzer:SeeingAnalyz
         val id=Config.cameraId;val c=cm.getCameraCharacteristics(id)
         c.get(CameraCharacteristics.SENSOR_INFO_EXPOSURE_TIME_RANGE)?.let{expRange=it.lower..it.upper}
         c.get(CameraCharacteristics.SENSOR_INFO_SENSITIVITY_RANGE)?.let{isoRange=it.lower..it.upper}
-        exposureNs=exposureNs.coerceIn(expRange.first,expRange.last);iso=iso.coerceIn(isoRange.first,isoRange.last)
+        exposureNs = expRange.first   // start dim; the loop ramps up (no open-bright clip)
+        iso = isoRange.first
         val caps=c.get(CameraCharacteristics.REQUEST_AVAILABLE_CAPABILITIES)?:IntArray(0)
         manualSupported=caps.contains(CameraCharacteristics.REQUEST_AVAILABLE_CAPABILITIES_MANUAL_SENSOR)
         if(!manualSupported)listener.onError("Camera $id has NO manual exposure — AE cannot be locked. Pick a non-NO-MANUAL camera in Settings.")

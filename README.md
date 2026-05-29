@@ -1,3 +1,3 @@
 # SSeeingMeter
 seeing cell phone
-ClaudebSinnet 4.6 Adaptive
+Claude Sonnet 4.6 Adaptive

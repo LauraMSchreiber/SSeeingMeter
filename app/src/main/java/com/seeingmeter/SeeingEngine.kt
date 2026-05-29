@@ -30,20 +30,42 @@ object Fft {
                     re[i+k]=aRe+tRe;im[i+k]=aIm+tIm;re[i+k+len/2]=aRe-tRe;im[i+k+len/2]=aIm-tIm
                     val nRe=cRe*wRe-cIm*wIm;cIm=cRe*wIm+cIm*wRe;cRe=nRe};i+=len};len=len shl 1}
     }
-    private fun floorPow2(x:Int):Int{var p=1;while(p*2<=x)p*=2;return p}
-    fun welchPsd(x:DoubleArray,fs:Double,segLenReq:Int,overlap:Double):Pair<DoubleArray,DoubleArray>{
-        if(x.size<8||fs<=0)return Pair(DoubleArray(0),DoubleArray(0))
-        val segLen=floorPow2(min(segLenReq,x.size));val step=max(1,(segLen*(1.0-overlap)).toInt());val half=segLen/2
-        val w=DoubleArray(segLen){0.5-0.5*cos(2.0*PI*it/(segLen-1))};val wPow=w.sumOf{it*it};val scale=1.0/(fs*wPow)
-        val acc=DoubleArray(half+1);var segs=0;var start=0
-        while(start+segLen<=x.size){val re=DoubleArray(segLen);val im=DoubleArray(segLen)
-            var mean=0.0;for(i in 0 until segLen)mean+=x[start+i];mean/=segLen
-            for(i in 0 until segLen)re[i]=(x[start+i]-mean)*w[i];fft(re,im)
-            for(k in 0..half){var p=(re[k]*re[k]+im[k]*im[k])*scale;if(k!=0&&k!=half)p*=2.0;acc[k]+=p}
-            segs++;start+=step}
-        if(segs==0)return Pair(DoubleArray(0),DoubleArray(0))
-        val psd=DoubleArray(half+1){acc[it]/segs};val df=fs/segLen;val freqs=DoubleArray(half+1){it*df}
-        return Pair(freqs,psd)
+    fun evaluate(
+        meanFrac: Double,
+        maxFrac: Double,
+        curExposureNs: Long,
+        curIso: Int,
+        expRangeNs: LongRange,
+        isoRange: IntRange
+    ): Decision {
+        val target = Config.exposureTargetFrac
+        val tol = Config.exposureTolFrac
+        val saturated = maxFrac >= Config.saturationFrac
+
+        if (!saturated && abs(meanFrac - target) <= tol)
+            return Decision(Action.OK, curExposureNs, curIso, "level ok")
+
+        val factor = if (saturated) 0.5 else (target / meanFrac).coerceIn(0.05, 20.0)
+
+        // Total light ∝ exposure × ISO. Prefer shortest exposure; let ISO carry
+        // brightness — this can now LOWER ISO to escape clipping.
+        val product = curExposureNs.toDouble() * curIso.toDouble() * factor
+        val expMin = expRangeNs.first
+        var newExp = expMin
+        var newIso = (product / expMin).roundToInt()
+        if (newIso > isoRange.last) {            // too dark even at max ISO → lengthen exposure
+            newIso = isoRange.last
+            newExp = (product / newIso).roundToLong()
+        } else if (newIso < isoRange.first) {    // too bright even at min exp & min ISO
+            newIso = isoRange.first               // hardware floor: needs ND / denser diffuser
+            newExp = expMin
+        }
+        newExp = newExp.coerceIn(expRangeNs.first, expRangeNs.last)
+        newIso = newIso.coerceIn(isoRange.first, isoRange.last)
+
+        val action = if (saturated) Action.SATURATED else Action.ADJUST
+        return Decision(action, newExp, newIso, "exp=${newExp / 1000}us iso=$newIso")
+    }
     }
 }
 

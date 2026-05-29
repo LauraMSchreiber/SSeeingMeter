@@ -180,24 +180,34 @@ object ExposureLogic {
         val tol = Config.exposureTolFrac
         val saturated = maxFrac >= Config.saturationFrac
 
-        if (!saturated && abs(meanFrac - target) <= tol)
-            return Decision(Action.OK, curExposureNs, curIso, "level ok")
-
-        val factor = if (saturated) 0.5 else (target / meanFrac).coerceIn(0.05, 20.0)
-
-        val product = curExposureNs.toDouble() * curIso.toDouble() * factor
         val expMin = expRangeNs.first
-        var newExp = expMin
-        var newIso = (product / expMin).roundToInt()
-        if (newIso > isoRange.last) {
-            newIso = isoRange.last
-            newExp = (product / newIso).roundToLong()
-        } else if (newIso < isoRange.first) {
-            newIso = isoRange.first
-            newExp = expMin
+        // Cap exposure so each row's integration stays short -> high temporal
+        // bandwidth. 1 ms ~ usable to ~160 Hz. Lower to chase faster scintillation.
+        val expCap = 1_000_000L.coerceIn(expMin, expRangeNs.last)
+        val isoMin = isoRange.first
+        val isoMax = isoRange.last
+
+        // Inside the band and not clipping -> change NOTHING (deadband kills jitter).
+        if (!saturated && abs(meanFrac - target) <= tol)
+            return Decision(Action.OK, curExposureNs, curIso, "lock")
+
+        // ONE gentle step toward target, <= 2x per frame. Clipped -> just halve.
+        val ratio = if (saturated) 0.5
+                    else (target / meanFrac.coerceAtLeast(1.0 / 255)).coerceIn(0.5, 2.0)
+
+        var newExp = curExposureNs
+        var newIso = curIso
+        if (ratio < 1.0) {
+            // TOO BRIGHT -> drop ISO toward min FIRST, then shorten exposure.
+            if (curIso > isoMin) newIso = (curIso * ratio).roundToInt()
+            else                 newExp = (curExposureNs * ratio).roundToLong()
+        } else {
+            // TOO DARK -> lengthen exposure to the cap FIRST, then raise ISO.
+            if (curExposureNs < expCap) newExp = (curExposureNs * ratio).roundToLong()
+            else                        newIso = (curIso * ratio).roundToInt()
         }
-        newExp = newExp.coerceIn(expRangeNs.first, expRangeNs.last)
-        newIso = newIso.coerceIn(isoRange.first, isoRange.last)
+        newExp = newExp.coerceIn(expMin, expCap)
+        newIso = newIso.coerceIn(isoMin, isoMax)
 
         val action = if (saturated) Action.SATURATED else Action.ADJUST
         return Decision(action, newExp, newIso, "exp=${newExp / 1000}us iso=$newIso")

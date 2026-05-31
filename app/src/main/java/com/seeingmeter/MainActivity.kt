@@ -286,7 +286,7 @@ class MainActivity : Activity(), CameraController.Listener, SensorEventListener,
             tvResults.text = "r0=${"%.2f".format(r.r0M * 100)} cm   seeing=${"%.2f".format(r.seeingArcsec)}\"" +
                     "  σ_I=${"%.4f".format(r.sigma2I)}   f_c=${"%.1f".format(r.fCharHz)} Hz" +
                     "  H=${(r.hFitM / 1000).let { "%.1f".format(it) }} km   ${r.quality}"
-        } else tvResults.text = "warming up…"
+        } else tvResults.text = "settling exposure — waiting for stable ISO…"
 
         tvParams.text = "Params: " + Config.toJson().toString()
     }
